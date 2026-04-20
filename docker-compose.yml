@@ -1,0 +1,9 @@
+services:
+  organizer-bot:
+    build: .
+    container_name: organizer-bot
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
