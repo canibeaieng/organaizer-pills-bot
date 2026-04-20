@@ -111,6 +111,18 @@ class Database:
 
         return Medication(*row) if row else None
 
+    async def update_medication_field(self, user_id: int, medication_id: int, field: str, value: str) -> bool:
+        allowed_fields = {"name", "dosage", "time_of_day"}
+        if field not in allowed_fields:
+            return False
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                f"UPDATE medications SET {field} = ? WHERE id = ? AND user_id = ? AND is_active = 1",
+                (value, medication_id, user_id),
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
     async def delete_medication(self, user_id: int, medication_id: int) -> bool:
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(

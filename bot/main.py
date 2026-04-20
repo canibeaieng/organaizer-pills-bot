@@ -12,9 +12,9 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.config import load_settings
 from bot.db import Database
-from bot.keyboards import MAIN_MENU, edit_medications_keyboard
+from bot.keyboards import MAIN_MENU, edit_medication_actions_keyboard, edit_medications_keyboard
 from bot.scheduler import ReminderScheduler
-from bot.states import AddMedicationStates
+from bot.states import AddMedicationStates, EditMedicationStates
 
 
 logging.basicConfig(level=logging.INFO)
@@ -30,9 +30,10 @@ APP_TIMEZONE = None
 
 @dp.message(CommandStart())
 async def start_handler(message: Message) -> None:
+    name = message.from_user.first_name if message.from_user else "друг"
     await message.answer(
-        "Привет! Я помогу не забывать принимать лекарства.\n"
-        "Используй кнопки меню ниже.",
+        f"👋 Привет, {name}! Я помогу не забывать принимать лекарства.\n"
+        "Используй кнопки меню ниже 👇",
         reply_markup=MAIN_MENU,
     )
 
@@ -40,20 +41,22 @@ async def start_handler(message: Message) -> None:
 @dp.message(Command("help"))
 async def help_handler(message: Message) -> None:
     await message.answer(
+        "ℹ️ <b>Справка</b>\n\n"
         "Команды:\n"
-        "/start - перезапустить меню\n"
-        "/help - помощь\n\n"
+        "/start — перезапустить меню\n"
+        "/help — помощь\n\n"
         "Кнопки:\n"
-        "Добавить лекарство\n"
-        "Посмотреть лекарства\n"
-        "Редактировать лекарства"
+        "💊 Добавить лекарство\n"
+        "📋 Мои лекарства\n"
+        "✏️ Редактировать лекарства",
+        parse_mode="HTML",
     )
 
 
-@dp.message(F.text == "Добавить лекарство")
+@dp.message(F.text == "💊 Добавить лекарство")
 async def add_medication_begin(message: Message, state: FSMContext) -> None:
     await state.set_state(AddMedicationStates.waiting_name)
-    await message.answer("Введите название лекарства. Например: Витамин D")
+    await message.answer("💊 Введите название лекарства.\nНапример: <b>Витамин D</b>", parse_mode="HTML")
 
 
 @dp.message(AddMedicationStates.waiting_name)
@@ -65,7 +68,7 @@ async def add_medication_name(message: Message, state: FSMContext) -> None:
 
     await state.update_data(name=name)
     await state.set_state(AddMedicationStates.waiting_dosage)
-    await message.answer("Введите дозировку. Например: 1 капсула")
+    await message.answer("💉 Введите дозировку.\nНапример: <b>1 капсула</b>", parse_mode="HTML")
 
 
 @dp.message(AddMedicationStates.waiting_dosage)
@@ -77,14 +80,14 @@ async def add_medication_dosage(message: Message, state: FSMContext) -> None:
 
     await state.update_data(dosage=dosage)
     await state.set_state(AddMedicationStates.waiting_time)
-    await message.answer("Введите время приема в формате ЧЧ:ММ. Например: 17:00")
+    await message.answer("🕐 Введите время приема в формате ЧЧ:ММ.\nНапример: <b>17:00</b>", parse_mode="HTML")
 
 
 @dp.message(AddMedicationStates.waiting_time)
 async def add_medication_time(message: Message, state: FSMContext) -> None:
     time_of_day = (message.text or "").strip()
     if TIME_PATTERN.match(time_of_day) is None:
-        await message.answer("Неверный формат времени. Используйте ЧЧ:ММ, например 07:30")
+        await message.answer("❌ Неверный формат времени. Используйте ЧЧ:ММ, например <b>07:30</b>", parse_mode="HTML")
         return
 
     data = await state.get_data()
@@ -101,43 +104,159 @@ async def add_medication_time(message: Message, state: FSMContext) -> None:
     user_med_number = len(user_medications)
 
     await message.answer(
-        "Лекарство добавлено.\n"
-        f"Номер в вашем списке: {user_med_number}\n"
-        f"{data['name']} - {data['dosage']} - {time_of_day}",
+        "✅ <b>Лекарство добавлено!</b>\n\n"
+        f"📌 Номер в вашем списке: {user_med_number}\n"
+        f"💊 {data['name']} — {data['dosage']}\n"
+        f"🕐 Напоминание: {time_of_day}",
         reply_markup=MAIN_MENU,
+        parse_mode="HTML",
     )
 
 
-@dp.message(F.text == "Посмотреть лекарства")
+@dp.message(F.text == "📋 Мои лекарства")
 async def list_medications(message: Message) -> None:
     user_id = message.from_user.id if message.from_user else 0
     medications = await db.get_user_medications(user_id)
 
     if not medications:
-        await message.answer("Список пуст. Сначала добавьте лекарство.")
+        await message.answer("📭 Список пуст. Сначала добавьте лекарство.")
         return
 
-    lines = ["Текущие лекарства:"]
+    lines = ["📋 <b>Ваши лекарства:</b>\n"]
     for idx, item in enumerate(medications, start=1):
-        lines.append(f"{idx}. {item.name} - {item.dosage} - {item.time_of_day}")
+        lines.append(f"{idx}. 💊 <b>{item.name}</b> — {item.dosage}\n    🕐 {item.time_of_day}")
 
-    await message.answer("\n".join(lines))
+    await message.answer("\n".join(lines), parse_mode="HTML")
 
 
-@dp.message(F.text == "Редактировать лекарства")
+@dp.message(F.text == "✏️ Редактировать лекарства")
 async def edit_medications(message: Message) -> None:
     user_id = message.from_user.id if message.from_user else 0
     medications = await db.get_user_medications(user_id)
 
     if not medications:
-        await message.answer("Пока нет активных лекарств для редактирования.")
+        await message.answer("📭 Пока нет активных лекарств для редактирования.")
         return
 
     rows = [(item.id, item.name, item.dosage, item.time_of_day) for item in medications]
     await message.answer(
-        "Выберите лекарство, которое нужно удалить:",
+        "✏️ <b>Выберите лекарство для редактирования:</b>",
         reply_markup=edit_medications_keyboard(rows),
+        parse_mode="HTML",
     )
+
+
+@dp.callback_query(F.data.startswith("edit_med:"))
+async def edit_medication_select(callback: CallbackQuery) -> None:
+    if not callback.data:
+        return
+
+    _, medication_id_text = callback.data.split(":", 1)
+    try:
+        medication_id = int(medication_id_text)
+    except ValueError:
+        await callback.answer("Некорректный ID", show_alert=True)
+        return
+
+    medication = await db.get_medication_by_id(medication_id)
+    if not medication or medication.user_id != callback.from_user.id:
+        await callback.answer("Лекарство не найдено", show_alert=True)
+        return
+
+    await callback.message.edit_text(
+        f"💊 <b>{medication.name}</b>\n"
+        f"💉 Дозировка: {medication.dosage}\n"
+        f"🕐 Время: {medication.time_of_day}\n\n"
+        "Что хотите изменить?",
+        reply_markup=edit_medication_actions_keyboard(medication.id, medication.name),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@dp.callback_query(F.data == "back_to_edit_list")
+async def back_to_edit_list(callback: CallbackQuery) -> None:
+    user_id = callback.from_user.id
+    medications = await db.get_user_medications(user_id)
+
+    if not medications:
+        await callback.message.edit_text("📭 Пока нет активных лекарств.")
+        await callback.answer()
+        return
+
+    rows = [(item.id, item.name, item.dosage, item.time_of_day) for item in medications]
+    await callback.message.edit_text(
+        "✏️ <b>Выберите лекарство для редактирования:</b>",
+        reply_markup=edit_medications_keyboard(rows),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@dp.callback_query(F.data.startswith("edit_field:"))
+async def edit_field_select(callback: CallbackQuery, state: FSMContext) -> None:
+    if not callback.data:
+        return
+
+    parts = callback.data.split(":")
+    if len(parts) != 3:
+        await callback.answer("Некорректные данные", show_alert=True)
+        return
+
+    _, medication_id_text, field = parts
+    try:
+        medication_id = int(medication_id_text)
+    except ValueError:
+        await callback.answer("Некорректный ID", show_alert=True)
+        return
+
+    medication = await db.get_medication_by_id(medication_id)
+    if not medication or medication.user_id != callback.from_user.id:
+        await callback.answer("Лекарство не найдено", show_alert=True)
+        return
+
+    prompts = {
+        "name": "📝 Введите новое название лекарства:",
+        "dosage": "💉 Введите новую дозировку:",
+        "time": "🕐 Введите новое время приема в формате ЧЧ:ММ (например: <b>08:00</b>):",
+    }
+    db_field = "time_of_day" if field == "time" else field
+
+    await state.set_state(EditMedicationStates.waiting_new_value)
+    await state.update_data(medication_id=medication_id, field=db_field)
+    await callback.message.edit_text(prompts[field], parse_mode="HTML")
+    await callback.answer()
+
+
+@dp.message(EditMedicationStates.waiting_new_value)
+async def edit_field_value(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    medication_id: int = data["medication_id"]
+    field: str = data["field"]
+    value = (message.text or "").strip()
+    user_id = message.from_user.id if message.from_user else 0
+
+    if field == "time_of_day":
+        if TIME_PATTERN.match(value) is None:
+            await message.answer("❌ Неверный формат времени. Используйте ЧЧ:ММ, например <b>07:30</b>", parse_mode="HTML")
+            return
+    elif len(value) < 1:
+        await message.answer("❌ Значение не может быть пустым. Попробуйте ещё раз.")
+        return
+
+    updated = await db.update_medication_field(user_id, medication_id, field, value)
+    await state.clear()
+
+    if updated:
+        field_names = {"name": "Название", "dosage": "Дозировка", "time_of_day": "Время приема"}
+        await message.answer(
+            f"✅ <b>{field_names.get(field, 'Поле')} обновлено!</b>\n"
+            f"Новое значение: <b>{value}</b>",
+            reply_markup=MAIN_MENU,
+            parse_mode="HTML",
+        )
+    else:
+        await message.answer("❌ Не удалось обновить. Возможно, лекарство уже удалено.", reply_markup=MAIN_MENU)
 
 
 @dp.callback_query(F.data.startswith("delete_med:"))
@@ -155,10 +274,10 @@ async def delete_medication_callback(callback: CallbackQuery) -> None:
     user_id = callback.from_user.id
     removed = await db.delete_medication(user_id, medication_id)
     if removed:
-        await callback.message.edit_text("Лекарство удалено.")
+        await callback.message.edit_text("🗑️ Лекарство удалено.")
         await callback.answer("Удалено")
     else:
-        await callback.answer("Не удалось удалить или запись уже неактивна", show_alert=True)
+        await callback.answer("❌ Не удалось удалить или запись уже неактивна", show_alert=True)
 
 
 async def _process_followup_action(user_id: int, followup_id: int, action: str) -> tuple[bool, str]:
@@ -179,7 +298,7 @@ async def _process_followup_action(user_id: int, followup_id: int, action: str) 
     await db.complete_followup(followup_id)
 
     if action == "yes":
-        return True, "Супер! Отметил, что лекарство принято."
+        return True, "🎉 Отлично! Лекарство принято, отметил ✅"
 
     now = datetime.now(APP_TIMEZONE) if APP_TIMEZONE is not None else datetime.now().astimezone()
     next_time = now + timedelta(minutes=15)
@@ -192,7 +311,7 @@ async def _process_followup_action(user_id: int, followup_id: int, action: str) 
     if medication:
         med_text = f"{medication.name} ({medication.dosage})"
 
-    return True, f"Принято. Напомню через 15 минут: {med_text}"
+    return True, f"⏰ Хорошо, напомню через 15 минут: {med_text}"
 
 
 @dp.callback_query(F.data.startswith("followup:"))
@@ -243,7 +362,7 @@ async def followup_text_answer(message: Message) -> None:
 @dp.message()
 async def fallback_handler(message: Message) -> None:
     await message.answer(
-        "Я не понял команду. Используйте кнопки меню.",
+        "🤔 Я не понял команду. Используйте кнопки меню ниже.",
         reply_markup=MAIN_MENU,
     )
 
