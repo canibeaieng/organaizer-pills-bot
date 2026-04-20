@@ -17,6 +17,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Create temporary .env for CI
+        shell: bash
+        run: |
+          {
+            printf 'BOT_TOKEN=%s\n' '123456789:abcdefghijklmnopqrstuvwxyzABCDE'
+            printf 'BOT_TIMEZONE=%s\n' 'Europe/Moscow'
+          } > .env
+
       - name: Check Docker Compose file
         run: docker compose config
 
