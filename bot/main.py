@@ -158,6 +158,40 @@ async def delete_medication_callback(callback: CallbackQuery) -> None:
         await callback.answer("Не удалось удалить или запись уже неактивна", show_alert=True)
 
 
+async def _process_followup_action(user_id: int, followup_id: int, action: str) -> tuple[bool, str]:
+    if action not in {"yes", "no"}:
+        return False, "Неизвестное действие"
+
+    if not await db.is_followup_pending(followup_id):
+        return False, "Этот вопрос уже закрыт"
+
+    followup = await db.get_followup(followup_id)
+    if followup is None:
+        return False, "Вопрос не найден"
+
+    if followup.user_id != user_id:
+        return False, "Этот вопрос не для вас"
+
+    medication = await db.get_medication_by_id(followup.medication_id)
+    await db.complete_followup(followup_id)
+
+    if action == "yes":
+        return True, "Супер! Отметил, что лекарство принято."
+
+    now = datetime.now(APP_TIMEZONE) if APP_TIMEZONE is not None else datetime.now().astimezone()
+    next_time = now + timedelta(minutes=15)
+    await db.create_followup(
+        user_id=followup.user_id,
+        medication_id=followup.medication_id,
+        due_at=next_time,
+    )
+    med_text = "лекарство"
+    if medication:
+        med_text = f"{medication.name} ({medication.dosage})"
+
+    return True, f"Принято. Напомню через 15 минут: {med_text}"
+
+
 @dp.callback_query(F.data.startswith("followup:"))
 async def followup_answer_callback(callback: CallbackQuery, bot: Bot) -> None:
     if not callback.data:
@@ -175,48 +209,32 @@ async def followup_answer_callback(callback: CallbackQuery, bot: Bot) -> None:
         await callback.answer("Некорректный ID", show_alert=True)
         return
 
-    if not await db.is_followup_pending(followup_id):
-        await callback.answer("Этот вопрос уже закрыт", show_alert=True)
+    ok, user_message = await _process_followup_action(callback.from_user.id, followup_id, action)
+    if not ok:
+        await callback.answer(user_message, show_alert=True)
         return
 
-    followup = await db.get_followup(followup_id)
-    if followup is None:
-        await callback.answer("Вопрос не найден", show_alert=True)
+    await callback.answer("Готово")
+    if callback.message:
+        await callback.message.edit_reply_markup(reply_markup=None)
+        await callback.message.answer(user_message)
+
+
+@dp.message(F.text.regexp(r"(?i)^(да|нет)$"))
+async def followup_text_answer(message: Message) -> None:
+    user_id = message.from_user.id if message.from_user else 0
+    latest_followup = await db.get_latest_open_followup_for_user(user_id)
+
+    if latest_followup is None:
         return
 
-    if followup.user_id != callback.from_user.id:
-        await callback.answer("Этот вопрос не для вас", show_alert=True)
+    action = "yes" if (message.text or "").strip().lower() == "да" else "no"
+    ok, user_message = await _process_followup_action(user_id, latest_followup.id, action)
+    if not ok:
+        await message.answer(user_message)
         return
 
-    medication = await db.get_medication_by_id(followup.medication_id)
-    await db.complete_followup(followup_id)
-
-    if action == "yes":
-        await callback.answer("Отлично, отметил")
-        if callback.message:
-            await callback.message.edit_reply_markup(reply_markup=None)
-            await callback.message.answer("Супер! Отметил, что лекарство принято.")
-        return
-
-    if action == "no":
-        now = datetime.now(APP_TIMEZONE) if APP_TIMEZONE is not None else datetime.now().astimezone()
-        next_time = now + timedelta(minutes=15)
-        await db.create_followup(
-            user_id=followup.user_id,
-            medication_id=followup.medication_id,
-            due_at=next_time,
-        )
-        med_text = "лекарство"
-        if medication:
-            med_text = f"{medication.name} ({medication.dosage})"
-
-        await callback.answer("Хорошо, напомню через 15 минут")
-        if callback.message:
-            await callback.message.edit_reply_markup(reply_markup=None)
-            await callback.message.answer(f"Принято. Напомню через 15 минут: {med_text}")
-        return
-
-    await callback.answer("Неизвестное действие", show_alert=True)
+    await message.answer(user_message)
 
 
 @dp.message()

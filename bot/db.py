@@ -125,7 +125,7 @@ class Database:
                 """
                 UPDATE followups
                 SET status = 'cancelled'
-                WHERE medication_id = ? AND user_id = ? AND status = 'pending'
+                WHERE medication_id = ? AND user_id = ? AND status IN ('pending', 'awaiting')
                 """,
                 (medication_id, user_id),
             )
@@ -219,6 +219,25 @@ class Database:
             row = await cursor.fetchone()
 
         return row[0] if row else None
+
+    async def get_latest_open_followup_for_user(self, user_id: int) -> Followup | None:
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """
+                SELECT id, user_id, medication_id, due_at
+                FROM followups
+                WHERE user_id = ? AND status IN ('pending', 'awaiting')
+                ORDER BY due_at DESC, id DESC
+                LIMIT 1
+                """,
+                (user_id,),
+            )
+            row = await cursor.fetchone()
+
+        if not row:
+            return None
+
+        return Followup(id=row[0], user_id=row[1], medication_id=row[2], due_at=datetime.fromisoformat(row[3]))
 
     async def complete_followup(self, followup_id: int) -> None:
         async with aiosqlite.connect(self.db_path) as db:

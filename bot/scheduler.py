@@ -81,7 +81,8 @@ class ReminderScheduler:
                 chat_id=followup.user_id,
                 text=(
                     "Ты выпил лекарство?\n"
-                    f"{medication.name}, {medication.dosage}"
+                    f"{medication.name}, {medication.dosage}\n\n"
+                    "Нажми кнопку ниже. Если кнопки не видно, ответь сообщением: Да или Нет"
                 ),
                 reply_markup=reminder_answer_keyboard(followup.id),
             )
