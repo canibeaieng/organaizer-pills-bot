@@ -6,4 +6,8 @@ services:
     env_file:
       - .env
     volumes:
-      - ./data:/app/data
+      - medication_data:/app/data
+
+volumes:
+  medication_data:
+    driver: local

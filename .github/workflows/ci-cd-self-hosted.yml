@@ -14,33 +14,6 @@ jobs:
     name: CI checks
     runs-on: self-hosted
     steps:
-      - name: Clean previous workspace
-        shell: bash
-        run: |
-          WORK_DIR="${RUNNER_WORKSPACE}/organaizer-pills-bot"
-          if [ -d "$WORK_DIR" ]; then
-            echo "Attempting to clean $WORK_DIR"
-            sudo chmod -R 777 "$WORK_DIR/data" 2>/dev/null || true
-            sudo rm -rf "$WORK_DIR/data" 2>/dev/null || true
-            rm -rf "$WORK_DIR/data" 2>/dev/null || true
-            echo "Cleaned."
-          fi
-
-      - name: Debug environment
-        shell: bash
-        run: |
-          echo "=== System Info ==="
-          uname -a
-          echo "=== Git version ==="
-          git --version
-          echo "=== Network check ==="
-          ping -c 2 github.com || echo "GitHub unreachable"
-          echo "=== Disk space ==="
-          df -h / | head -2
-          echo "=== Working directory ==="
-          pwd
-          ls -la
-
       - name: Checkout
         uses: actions/checkout@v4
 
