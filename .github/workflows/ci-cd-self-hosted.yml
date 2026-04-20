@@ -17,9 +17,13 @@ jobs:
       - name: Clean previous workspace
         shell: bash
         run: |
-          if [ -d "organaizer-pills-bot/data" ]; then
-            chmod -R 755 organaizer-pills-bot/data || true
-            rm -rf organaizer-pills-bot/data || true
+          WORK_DIR="${RUNNER_WORKSPACE}/organaizer-pills-bot"
+          if [ -d "$WORK_DIR" ]; then
+            echo "Attempting to clean $WORK_DIR"
+            sudo chmod -R 777 "$WORK_DIR/data" 2>/dev/null || true
+            sudo rm -rf "$WORK_DIR/data" 2>/dev/null || true
+            rm -rf "$WORK_DIR/data" 2>/dev/null || true
+            echo "Cleaned."
           fi
 
       - name: Debug environment
