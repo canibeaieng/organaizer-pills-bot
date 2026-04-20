@@ -97,9 +97,12 @@ async def add_medication_time(message: Message, state: FSMContext) -> None:
     )
     await state.clear()
 
+    user_medications = await db.get_user_medications(user_id)
+    user_med_number = len(user_medications)
+
     await message.answer(
         "Лекарство добавлено.\n"
-        f"ID: {medication_id}\n"
+        f"Номер в вашем списке: {user_med_number}\n"
         f"{data['name']} - {data['dosage']} - {time_of_day}",
         reply_markup=MAIN_MENU,
     )
@@ -115,8 +118,8 @@ async def list_medications(message: Message) -> None:
         return
 
     lines = ["Текущие лекарства:"]
-    for item in medications:
-        lines.append(f"{item.id}. {item.name} - {item.dosage} - {item.time_of_day}")
+    for idx, item in enumerate(medications, start=1):
+        lines.append(f"{idx}. {item.name} - {item.dosage} - {item.time_of_day}")
 
     await message.answer("\n".join(lines))
 
