@@ -34,10 +34,21 @@ jobs:
       - name: Create .env from GitHub Secrets
         shell: bash
         run: |
-          cat > .env <<EOF
-          BOT_TOKEN=${{ secrets.BOT_TOKEN }}
-          BOT_TIMEZONE=${{ secrets.BOT_TIMEZONE }}
-          EOF
+          BOT_TOKEN_CLEAN="$(printf '%s' "${{ secrets.BOT_TOKEN }}" | tr -d '\r\n')"
+          BOT_TIMEZONE_CLEAN="$(printf '%s' "${{ secrets.BOT_TIMEZONE }}" | tr -d '\r\n')"
+          {
+            printf 'BOT_TOKEN=%s\n' "$BOT_TOKEN_CLEAN"
+            printf 'BOT_TIMEZONE=%s\n' "$BOT_TIMEZONE_CLEAN"
+          } > .env
+
+      - name: Validate BOT_TOKEN format
+        shell: bash
+        run: |
+          TOKEN="$(grep '^BOT_TOKEN=' .env | cut -d '=' -f2-)"
+          if ! printf '%s' "$TOKEN" | grep -Eq '^[0-9]{8,10}:[A-Za-z0-9_-]{35}$'; then
+            echo "BOT_TOKEN has invalid format. Check GitHub secret BOT_TOKEN."
+            exit 1
+          fi
 
       - name: Deploy with Docker Compose
         run: docker compose up -d --build
