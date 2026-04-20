@@ -14,6 +14,21 @@ jobs:
     name: CI checks
     runs-on: self-hosted
     steps:
+      - name: Debug environment
+        shell: bash
+        run: |
+          echo "=== System Info ==="
+          uname -a
+          echo "=== Git version ==="
+          git --version
+          echo "=== Network check ==="
+          ping -c 2 github.com || echo "GitHub unreachable"
+          echo "=== Disk space ==="
+          df -h / | head -2
+          echo "=== Working directory ==="
+          pwd
+          ls -la
+
       - name: Checkout
         uses: actions/checkout@v4
 
