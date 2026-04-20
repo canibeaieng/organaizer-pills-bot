@@ -55,19 +55,22 @@ class ReminderScheduler:
             if not inserted:
                 continue
 
+            followup_time = now + timedelta(minutes=30)
+            followup_id = await self.db.create_followup(
+                user_id=medication.user_id,
+                medication_id=medication.id,
+                due_at=followup_time,
+            )
+
             await self.bot.send_message(
                 chat_id=medication.user_id,
                 text=(
                     "Напоминаю о приеме лекарства!\n"
                     f"{medication.name}, {medication.dosage}\n"
-                    f"Время: {medication.time_of_day}"
+                    f"Время: {medication.time_of_day}\n\n"
+                    "Отметь ответ кнопкой ниже: выпил или не выпил"
                 ),
-            )
-            followup_time = now + timedelta(minutes=30)
-            await self.db.create_followup(
-                user_id=medication.user_id,
-                medication_id=medication.id,
-                due_at=followup_time,
+                reply_markup=reminder_answer_keyboard(followup_id),
             )
 
         due_followups = await self.db.get_due_followups(now)
