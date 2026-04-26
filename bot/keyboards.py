@@ -18,6 +18,15 @@ def reminder_answer_keyboard(followup_id: int) -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text="✅ Выпил", callback_data=f"followup:{followup_id}:yes")],
             [InlineKeyboardButton(text="⏰ Напомнить через 15 минут", callback_data=f"followup:{followup_id}:no")],
+            [InlineKeyboardButton(text="🛒 Лекарство закончилось", callback_data=f"followup:{followup_id}:restock")],
+        ]
+    )
+
+
+def restock_purchase_keyboard(medication_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="✅ Купил лекарство", callback_data=f"restock:{medication_id}:done")],
         ]
     )
 

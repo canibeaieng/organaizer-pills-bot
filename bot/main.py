@@ -12,7 +12,7 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.config import load_settings
 from bot.db import Database
-from bot.keyboards import MAIN_MENU, edit_medication_actions_keyboard, edit_medications_keyboard
+from bot.keyboards import MAIN_MENU, edit_medication_actions_keyboard, edit_medications_keyboard, restock_purchase_keyboard
 from bot.scheduler import ReminderScheduler
 from bot.states import AddMedicationStates, EditMedicationStates
 
@@ -26,6 +26,10 @@ TIME_PATTERN = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
 dp = Dispatcher()
 db = Database("data/medications.db")
 APP_TIMEZONE = None
+
+
+def _local_now() -> datetime:
+    return datetime.now(APP_TIMEZONE) if APP_TIMEZONE is not None else datetime.now().astimezone()
 
 
 @dp.message(CommandStart())
@@ -281,7 +285,7 @@ async def delete_medication_callback(callback: CallbackQuery) -> None:
 
 
 async def _process_followup_action(user_id: int, followup_id: int, action: str) -> tuple[bool, str]:
-    if action not in {"yes", "no"}:
+    if action not in {"yes", "no", "restock"}:
         return False, "Неизвестное действие"
 
     if not await db.is_followup_pending(followup_id):
@@ -296,11 +300,23 @@ async def _process_followup_action(user_id: int, followup_id: int, action: str) 
 
     medication = await db.get_medication_by_id(followup.medication_id)
     await db.complete_followup(followup_id)
+    event_date = _local_now().strftime("%Y-%m-%d")
 
     if action == "yes":
+        await db.add_medication_event(user_id, followup.medication_id, "taken", event_date)
         return True, "🎉 Отлично! Лекарство принято, отметил ✅"
 
-    now = datetime.now(APP_TIMEZONE) if APP_TIMEZONE is not None else datetime.now().astimezone()
+    if action == "restock":
+        updated = await db.mark_restock_requested(user_id, followup.medication_id)
+        if not updated:
+            return False, "Не удалось включить напоминание о покупке"
+        await db.add_medication_event(user_id, followup.medication_id, "restock_requested", event_date)
+        med_text = "лекарство"
+        if medication:
+            med_text = medication.name
+        return True, f"🛒 Принято. По {med_text} теперь будут приходить напоминания купить лекарство"
+
+    now = _local_now()
     next_time = now + timedelta(minutes=15)
     await db.create_followup(
         user_id=followup.user_id,
@@ -340,6 +356,47 @@ async def followup_answer_callback(callback: CallbackQuery, bot: Bot) -> None:
     if callback.message:
         await callback.message.edit_reply_markup(reply_markup=None)
         await callback.message.answer(user_message)
+
+
+@dp.callback_query(F.data.startswith("restock:"))
+async def restock_done_callback(callback: CallbackQuery) -> None:
+    if not callback.data:
+        return
+
+    parts = callback.data.split(":")
+    if len(parts) != 3:
+        await callback.answer("Некорректные данные", show_alert=True)
+        return
+
+    _, medication_id_text, action = parts
+    if action != "done":
+        await callback.answer("Неизвестное действие", show_alert=True)
+        return
+
+    try:
+        medication_id = int(medication_id_text)
+    except ValueError:
+        await callback.answer("Некорректный ID", show_alert=True)
+        return
+
+    medication = await db.get_medication_by_id(medication_id)
+    if medication is None or medication.user_id != callback.from_user.id:
+        await callback.answer("Лекарство не найдено", show_alert=True)
+        return
+
+    updated = await db.mark_restock_completed(callback.from_user.id, medication_id)
+    if not updated:
+        await callback.answer("Не удалось обновить статус", show_alert=True)
+        return
+
+    await db.add_medication_event(callback.from_user.id, medication_id, "restock_completed", _local_now().strftime("%Y-%m-%d"))
+    await callback.answer("Отлично")
+    if callback.message:
+        await callback.message.edit_reply_markup(reply_markup=None)
+        await callback.message.answer(
+            f"✅ Лекарство <b>{medication.name}</b> снова в наличии. Обычные напоминания возобновлены.",
+            parse_mode="HTML",
+        )
 
 
 @dp.message(F.text.regexp(r"(?i)^(да|нет)$"))
