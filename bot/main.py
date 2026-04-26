@@ -26,10 +26,28 @@ TIME_PATTERN = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
 dp = Dispatcher()
 db = Database("data/medications.db")
 APP_TIMEZONE = None
+RU_MONTH_NAMES = {
+    1: "января",
+    2: "февраля",
+    3: "марта",
+    4: "апреля",
+    5: "мая",
+    6: "июня",
+    7: "июля",
+    8: "августа",
+    9: "сентября",
+    10: "октября",
+    11: "ноября",
+    12: "декабря",
+}
 
 
 def _local_now() -> datetime:
     return datetime.now(APP_TIMEZONE) if APP_TIMEZONE is not None else datetime.now().astimezone()
+
+
+def _format_verbose_date(now: datetime) -> str:
+    return f"{now.day} {RU_MONTH_NAMES[now.month]} {now.year}"
 
 
 @dp.message(CommandStart())
@@ -52,6 +70,7 @@ async def help_handler(message: Message) -> None:
         "Кнопки:\n"
         "💊 Добавить лекарство\n"
         "📋 Мои лекарства\n"
+        "📊 Статистика\n"
         "✏️ Редактировать лекарства",
         parse_mode="HTML",
     )
@@ -129,6 +148,48 @@ async def list_medications(message: Message) -> None:
     lines = ["📋 <b>Ваши лекарства:</b>\n"]
     for idx, item in enumerate(medications, start=1):
         lines.append(f"{idx}. 💊 <b>{item.name}</b> — {item.dosage}\n    🕐 {item.time_of_day}")
+
+    await message.answer("\n".join(lines), parse_mode="HTML")
+
+
+@dp.message(F.text == "📊 Статистика")
+async def show_statistics(message: Message) -> None:
+    user_id = message.from_user.id if message.from_user else 0
+    now = _local_now()
+    current_date = now.strftime("%Y-%m-%d")
+    month_start = now.replace(day=1).strftime("%Y-%m-%d")
+
+    daily_summary = await db.get_daily_taken_summary(user_id, current_date)
+    scheduled_total, taken_total, monthly_breakdown = await db.get_monthly_summary(user_id, month_start, current_date)
+    missed_total = max(scheduled_total - taken_total, 0)
+
+    lines = [
+        "📊 <b>Статистика</b>",
+        "",
+        f"Сегодня, {_format_verbose_date(now)}:",
+        f"✅ Подтверждено приёмов: <b>{sum(count for _, count in daily_summary)}</b>",
+    ]
+
+    if daily_summary:
+        for medication_name, count in daily_summary:
+            lines.append(f"• {medication_name} — {count} раз")
+    else:
+        lines.append("• Сегодня подтверждённых приёмов пока нет")
+
+    lines.extend(
+        [
+            "",
+            f"За текущий месяц ({now.strftime('%m.%Y')}):",
+            f"✅ Принято: <b>{taken_total}</b>",
+            f"❌ Упущено: <b>{missed_total}</b>",
+        ]
+    )
+
+    if monthly_breakdown:
+        for medication_name, taken_count, missed_count in monthly_breakdown:
+            lines.append(f"• {medication_name} — принято {taken_count}, упущено {missed_count}")
+    else:
+        lines.append("• За текущий месяц статистики пока нет")
 
     await message.answer("\n".join(lines), parse_mode="HTML")
 

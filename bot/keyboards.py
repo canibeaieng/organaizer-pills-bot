@@ -6,6 +6,7 @@ MAIN_MENU = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="💊 Добавить лекарство")],
         [KeyboardButton(text="📋 Мои лекарства")],
+        [KeyboardButton(text="📊 Статистика")],
         [KeyboardButton(text="✏️ Редактировать лекарства")],
     ],
     resize_keyboard=True,
