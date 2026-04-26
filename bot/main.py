@@ -12,7 +12,13 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.config import load_settings
 from bot.db import Database
-from bot.keyboards import MAIN_MENU, edit_medication_actions_keyboard, edit_medications_keyboard, restock_purchase_keyboard
+from bot.keyboards import (
+    ADD_MEDICATION_CANCEL_MENU,
+    MAIN_MENU,
+    edit_medication_actions_keyboard,
+    edit_medications_keyboard,
+    restock_purchase_keyboard,
+)
 from bot.scheduler import ReminderScheduler
 from bot.states import AddMedicationStates, EditMedicationStates
 
@@ -79,7 +85,20 @@ async def help_handler(message: Message) -> None:
 @dp.message(F.text == "💊 Добавить лекарство")
 async def add_medication_begin(message: Message, state: FSMContext) -> None:
     await state.set_state(AddMedicationStates.waiting_name)
-    await message.answer("💊 Введите название лекарства.\nНапример: <b>Витамин D</b>", parse_mode="HTML")
+    await message.answer(
+        "💊 Введите название лекарства.\nНапример: <b>Витамин D</b>",
+        parse_mode="HTML",
+        reply_markup=ADD_MEDICATION_CANCEL_MENU,
+    )
+
+
+@dp.message(AddMedicationStates(), F.text == "❌ Отменить добавление")
+async def cancel_add_medication(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer(
+        "👌 Добавление лекарства отменено.",
+        reply_markup=MAIN_MENU,
+    )
 
 
 @dp.message(AddMedicationStates.waiting_name)
@@ -91,7 +110,11 @@ async def add_medication_name(message: Message, state: FSMContext) -> None:
 
     await state.update_data(name=name)
     await state.set_state(AddMedicationStates.waiting_dosage)
-    await message.answer("💉 Введите дозировку.\nНапример: <b>1 капсула</b>", parse_mode="HTML")
+    await message.answer(
+        "💉 Введите дозировку.\nНапример: <b>1 капсула</b>",
+        parse_mode="HTML",
+        reply_markup=ADD_MEDICATION_CANCEL_MENU,
+    )
 
 
 @dp.message(AddMedicationStates.waiting_dosage)
@@ -103,7 +126,11 @@ async def add_medication_dosage(message: Message, state: FSMContext) -> None:
 
     await state.update_data(dosage=dosage)
     await state.set_state(AddMedicationStates.waiting_time)
-    await message.answer("🕐 Введите время приема в формате ЧЧ:ММ.\nНапример: <b>17:00</b>", parse_mode="HTML")
+    await message.answer(
+        "🕐 Введите время приема в формате ЧЧ:ММ.\nНапример: <b>17:00</b>",
+        parse_mode="HTML",
+        reply_markup=ADD_MEDICATION_CANCEL_MENU,
+    )
 
 
 @dp.message(AddMedicationStates.waiting_time)

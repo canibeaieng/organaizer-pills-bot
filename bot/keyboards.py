@@ -14,6 +14,15 @@ MAIN_MENU = ReplyKeyboardMarkup(
 )
 
 
+ADD_MEDICATION_CANCEL_MENU = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="❌ Отменить добавление")],
+    ],
+    resize_keyboard=True,
+    input_field_placeholder="Можно отменить добавление",
+)
+
+
 def reminder_answer_keyboard(followup_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
