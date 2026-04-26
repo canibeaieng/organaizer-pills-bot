@@ -55,7 +55,7 @@ class ReminderScheduler:
             if not inserted:
                 continue
 
-            followup_time = now + timedelta(minutes=30)
+            followup_time = now + timedelta(minutes=15)
             followup_id = await self.db.create_followup(
                 user_id=medication.user_id,
                 medication_id=medication.id,
@@ -85,8 +85,9 @@ class ReminderScheduler:
                 text=(
                     "Ты выпил лекарство?\n"
                     f"{medication.name}, {medication.dosage}\n\n"
-                    "Нажми кнопку ниже. Если кнопки не видно, ответь сообщением: Да или Нет"
+                    "Нажми кнопку ниже. Если кнопки не видно, ответь сообщением: Да или Нет\n"
+                    "Если не ответишь, я снова напомню через 30 минут"
                 ),
                 reply_markup=reminder_answer_keyboard(followup.id),
             )
-            await self.db.mark_followup_sent(followup.id)
+            await self.db.mark_followup_sent(followup.id, now + timedelta(minutes=30))

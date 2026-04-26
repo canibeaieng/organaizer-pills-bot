@@ -191,7 +191,7 @@ class Database:
                 """
                 SELECT id, user_id, medication_id, due_at
                 FROM followups
-                WHERE status = 'pending' AND due_at <= ?
+                WHERE status IN ('pending', 'awaiting') AND due_at <= ?
                 ORDER BY due_at ASC
                 """,
                 (now.isoformat(),),
@@ -275,14 +275,14 @@ class Database:
 
         return row is not None
 
-    async def mark_followup_sent(self, followup_id: int) -> None:
+    async def mark_followup_sent(self, followup_id: int, next_due_at: datetime) -> None:
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
                 """
                 UPDATE followups
-                SET status = 'awaiting'
-                WHERE id = ? AND status = 'pending'
+                SET status = 'awaiting', due_at = ?
+                WHERE id = ? AND status IN ('pending', 'awaiting')
                 """,
-                (followup_id,),
+                (next_due_at.isoformat(), followup_id),
             )
             await db.commit()
