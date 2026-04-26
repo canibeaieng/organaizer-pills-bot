@@ -346,7 +346,7 @@ class Database:
                 SELECT m.name, COUNT(*)
                 FROM medication_events e
                 JOIN medications m ON m.id = e.medication_id
-                WHERE e.user_id = ? AND e.event_type = 'taken' AND e.event_date = ?
+                WHERE e.user_id = ? AND e.event_type = 'taken' AND e.event_date = ? AND m.is_active = 1
                 GROUP BY m.name
                 ORDER BY m.name ASC
                 """,
@@ -368,7 +368,7 @@ class Database:
                 SELECT COUNT(*)
                 FROM reminder_log r
                 JOIN medications m ON m.id = r.medication_id
-                WHERE m.user_id = ? AND r.reminder_date BETWEEN ? AND ?
+                WHERE m.user_id = ? AND m.is_active = 1 AND r.reminder_date BETWEEN ? AND ?
                 """,
                 (user_id, start_date, end_date),
             )
@@ -377,8 +377,9 @@ class Database:
             taken_cursor = await db.execute(
                 """
                 SELECT COUNT(*)
-                FROM medication_events
-                WHERE user_id = ? AND event_type = 'taken' AND event_date BETWEEN ? AND ?
+                FROM medication_events e
+                JOIN medications m ON m.id = e.medication_id
+                WHERE e.user_id = ? AND e.event_type = 'taken' AND e.event_date BETWEEN ? AND ? AND m.is_active = 1
                 """,
                 (user_id, start_date, end_date),
             )
@@ -390,7 +391,7 @@ class Database:
                 FROM medications m
                 LEFT JOIN reminder_log r
                     ON r.medication_id = m.id AND r.reminder_date BETWEEN ? AND ?
-                WHERE m.user_id = ?
+                WHERE m.user_id = ? AND m.is_active = 1
                 GROUP BY m.id, m.name
                 HAVING COUNT(r.id) > 0
                 """,
@@ -407,7 +408,7 @@ class Database:
                     AND e.user_id = m.user_id
                     AND e.event_type = 'taken'
                     AND e.event_date BETWEEN ? AND ?
-                WHERE m.user_id = ?
+                WHERE m.user_id = ? AND m.is_active = 1
                 GROUP BY m.id, m.name
                 HAVING COUNT(e.id) > 0
                 """,
